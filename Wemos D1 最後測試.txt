@@ -1,0 +1,247 @@
+﻿#include "ESP8266WiFi.h"
+#include "DHT.h"
+void send_event(const char *event); // Function 原型
+
+// ===== Wifi setup =====
+const char *ssid     = "Eden"; //自己wifi名稱
+const char *password = "0934368302"; //wifi密碼
+
+// ===== IFTTT setup =====
+const char *host = "maker.ifttt.com";
+const char *privateKey = "qL1Y1VhF1egiNYaVXv-Bv";
+
+//*-- IoT Information
+//#define SSID    "Eden"  //自己wifi名稱
+//#define PASS    "0934368302"  // 密碼
+#define HOST    "api.thingspeak.com" // ThingSpeak IP Address
+#define PORT    80
+String APIKEY  = "OQ9SP6C3HUEWVS5I";  //thingspeak上的 write ARIKEY
+
+// ===== Hardware setup =====
+const int PIRSensor = D9;     // the number of the pushbutton pin
+const int ledPin = D4;        // the number of the LED pin
+const int ledPin1 = D6;
+const int buzzerPin = D5;
+const int fireSensor = D10;
+const int fsrPin = A0;        // 壓力感測器的 pin
+const int smokePin = D7;
+//*-- DHT11
+#define _dhtpin    D8
+#define _dhttype   DHT11
+int fsrData;   //壓力值
+int smokeval = 0;
+int Fireval = 0;
+int sensorValue = 0;  
+int StatuPIRSensor ;
+int StatuFire ;
+int StatuDHT11 ;
+int incomingByte; 
+
+// Initialize DHT sensor 
+DHT dht11( _dhtpin, _dhttype );
+float temperature, humidity;
+
+void setup() 
+{
+  pinMode(PIRSensor, INPUT);
+  pinMode(ledPin, OUTPUT);
+  pinMode(ledPin1, OUTPUT);
+  pinMode(buzzerPin,OUTPUT);
+  Serial.begin(9600);
+  StatuPIRSensor = 0;
+  StatuFire = 0;
+  StatuDHT11 = 0;
+  delay(10);
+
+  //連線設定
+  Serial.println();
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+
+  // 等待連線
+  
+  int led = HIGH;  
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(200);
+    digitalWrite(ledPin, led);
+    led = !led;
+    Serial.print(".");
+  }
+  digitalWrite(ledPin, LOW);
+
+  // ===== Connect successful =====
+  Serial.println("");
+  Serial.println("WiFi connected");  
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+  
+  // DHT11
+    dht11.begin();
+    Serial.println( "DHT11 Ready!" );
+    delay(2000);
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    incomingByte = Serial.read();
+    if(incomingByte == 'b'){
+      StatuPIRSensor = 1;
+    }
+     if(incomingByte == 'c'){
+      StatuPIRSensor = 0;
+    }
+  if(incomingByte == 'Z'){
+    StatuFire = 1;
+  
+  }
+  if(incomingByte == 'a'){
+    StatuFire = 0;
+  
+  }
+  if(incomingByte == 'V'){
+    StatuDHT11 = 1;
+  
+  }
+  if(incomingByte == 'W'){
+    StatuDHT11 = 0;
+  
+  }
+  }
+  //紅外線控制  
+  if(StatuPIRSensor == 0)
+  {
+    sensorValue = 0;
+  }else
+  {
+  sensorValue = digitalRead(PIRSensor);
+  fsrData = analogRead(fsrPin);
+  Serial.println(sensorValue);
+  Serial.print("FSR value is:");
+  Serial.println(fsrData);
+  }
+  if (sensorValue == HIGH && fsrData<=10) {   //偵測到有人   
+  digitalWrite(ledPin, HIGH);  //有人，開燈
+  digitalWrite(buzzerPin, HIGH); //發警報器
+     send_event("NotifyMe"); //傳送訊息
+  }
+  else{
+  digitalWrite(ledPin, LOW);  // 沒人，關燈
+  digitalWrite(buzzerPin, LOW);
+  
+      }
+  //火焰偵測控制，未完成
+  if(StatuFire == 0)
+  {
+  Fireval =  1 ;
+  Serial.println(Fireval);
+  } 
+  if(StatuFire == 1)
+  {
+  Fireval = digitalRead(fireSensor);
+  Serial.println(Fireval);
+  if(Fireval == 0){
+    digitalWrite(ledPin1, HIGH);   
+    digitalWrite(buzzerPin, HIGH);
+    send_event("fire");
+  }else
+  {
+    digitalWrite(ledPin1, LOW);  
+    digitalWrite(buzzerPin, LOW);
+  }
+}
+  
+  
+  
+  //溫溼度
+    if(StatuDHT11 == 1)
+    {    // DHT11 溫度與濕度傳送  
+    humidity    = dht11.readHumidity();
+    temperature = dht11.readTemperature();    
+        Serial.print( "Humidity: " );
+        Serial.print( humidity );
+        Serial.print( ", Temperature: " );
+        Serial.println( temperature );
+        updateDHT11();
+        delay(15000);
+    }else
+    humidity = 0;
+    temperature = 0;
+}
+  
+void send_event(const char *event) //傳送訊息副程式
+{
+ // Serial.print("Connecting to ");
+ // Serial.println(host);
+  WiFiClient client;
+  const int httpPort = 80;
+  if (!client.connect(host, httpPort)) {
+    Serial.println("Connection failed");
+    return;
+  }
+  
+  String url = "/trigger/"; // Create a URI for the request
+  url += event;
+  url += "/with/key/";
+  url += privateKey;
+  
+  Serial.print("Requesting URL: ");
+  Serial.println(url);
+  Serial.println(url);
+  
+//   This will send the request to the server
+  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+               "Host: " + host + "\r\n" + 
+               "Connection: close\r\n\r\n");
+
+  // Read all the lines of the reply from server and print them to Serial,
+  // the connection will close when the server has sent all the data.
+  while(client.connected())
+  {
+    if(client.available())
+    {
+      String line = client.readStringUntil('\r');
+      Serial.print(line);
+    } else {
+      // No data yet, wait a bit
+      delay(50);
+    };
+  }
+  
+ // Serial.println();
+ // Serial.println("closing connection");
+  client.stop();
+}
+
+// 溫溼度上傳值副程式
+void updateDHT11()
+{
+    // 設定 ESP8266 作為 Client 端
+    WiFiClient client;
+    if( !client.connect( HOST, PORT ) )
+    {
+        Serial.println( "connection failed" );
+        return;
+    }
+    else
+    {
+        // 準備上傳到 ThingSpeak IoT Server 的資料
+        // 已經預先設定好 ThingSpeak IoT Channel 的欄位
+        // field1：溫度；field2：濕度
+        String postStr = APIKEY + "&field1=" + String((int)temperature) + \
+                                  "&field2=" + String((int)humidity) + "\r\n\r\n";
+       client.print( "POST /update HTTP/1.1\n" );
+        client.print( "Host: api.thingspeak.com\n" );
+        client.print( "Connection: close\n" );
+        client.print( "X-THINGSPEAKAPIKEY: "+APIKEY+"\n" );
+        client.print( "Content-Type: application/x-www-form-urlencoded\n" );
+        client.print( "Content-Length: " );
+        client.print( postStr.length() );
+        client.print( "\n\n" );
+        client.print( postStr );
+
+        client.stop();
+    }
+}

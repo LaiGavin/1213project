@@ -1,0 +1,199 @@
+#include <Wire.h>
+#include <Stepper.h>
+#include "DHT.h"
+#define STEPS 100
+
+#define DHTPIN 2    
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE); // Initialize DHT sensor
+
+Stepper stepper(STEPS, 8, 9, 10, 11 ); //9和10要反接
+int relayPin = 13;    //繼電器 pin
+int ledPin = 7;    // LED pin
+int incomingByte;         // 轉變數
+int relayState = 0;    
+int tempState = 0;
+
+void setup() {
+  digitalWrite(ledPin, LOW);
+  Serial.begin(9600);
+  pinMode(ledPin, OUTPUT);
+  pinMode(relayPin, OUTPUT);  
+  stepper.setSpeed(160);     // 將馬達的速度設定成140RPM 最大  150~160
+  dht.begin();
+  tempState = 0;
+}
+
+void loop() {
+  //基本開關控制  //不能用到 G H I 
+  if (Serial.available() > 0) {
+    incomingByte = Serial.read();
+  
+    if (incomingByte == 'A') {
+      digitalWrite(ledPin, HIGH);
+    }
+    if (incomingByte == 'B') {
+      digitalWrite(ledPin, LOW);
+    }
+    if (incomingByte == 'C') {
+      digitalWrite(relayPin,HIGH);
+    }
+    if (incomingByte == 'D') {
+      digitalWrite(relayPin,LOW);
+    }
+  if (incomingByte == 'E') {
+      windowopen();
+    }
+  if (incomingByte == 'F') {
+      windowclose();
+    }
+  if (incomingByte == 'S') {
+      ledclose1();
+    }
+  if (incomingByte == 'T') {
+      ledclose2();
+    }
+  if (incomingByte == 'U') {
+      ledclose3();
+    }
+  if (incomingByte == 'J') {
+      LEDopen1();
+    }
+  if (incomingByte == 'K') {
+      LEDopen2();
+    }
+  if (incomingByte == 'L') {
+      LEDopen3();
+    }
+  if (incomingByte == 'M') {
+      FANclose1();
+    }
+  if (incomingByte == 'N') {
+      FANclose2();
+    }
+  if (incomingByte == 'O') {
+      FANclose3();
+    }
+  if (incomingByte == 'P') {
+      FANopen1();
+    }
+  if (incomingByte == 'Q') {
+      FANopen2();
+    }
+  if (incomingByte == 'R') {
+      FANopen3();
+    }
+  if (incomingByte == 'X') {
+      tempState = 1;
+    }
+  if (incomingByte == 'Y') {
+      tempState = 0;
+    }
+  }
+  if(tempState == 1){
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
+    Serial.println(t);
+    Serial.println(h);
+    if (isnan(h) || isnan(t)) {
+      Serial.println("Failed to read from DHT sensor!");
+      return;
+    }
+    if(t > 29){
+      digitalWrite(relayPin,HIGH);
+    }
+    if(t < 27){
+      digitalWrite(relayPin,LOW);
+    }
+    if(h > 82){
+      digitalWrite(ledPin, HIGH);
+    }
+    if(h < 75){
+      digitalWrite(ledPin, LOW);
+    }
+  }
+  
+}
+
+void windowopen(){
+stepper.step(4000);//正1圈
+  }
+void windowclose(){
+stepper.step(-4000);//正1圈
+}
+//LED定時關閉
+void ledclose1(){
+digitalWrite(ledPin, HIGH);
+delay(3000);
+digitalWrite(ledPin, LOW);
+  }
+void ledclose2(){
+digitalWrite(ledPin, HIGH);
+delay(5000);
+digitalWrite(ledPin, LOW);
+  }
+void ledclose3(){
+digitalWrite(ledPin, HIGH);
+delay(10000);
+digitalWrite(ledPin, LOW);
+  }
+//LED定時開啟
+void LEDopen1(){
+digitalWrite(ledPin, LOW);
+delay(3000);
+digitalWrite(ledPin, HIGH);
+  }
+void LEDopen2(){
+digitalWrite(ledPin, LOW);
+delay(5000);
+digitalWrite(ledPin, HIGH);
+  }
+void LEDopen3(){
+digitalWrite(ledPin, LOW);
+delay(10000);
+digitalWrite(ledPin, HIGH);
+  }
+//FAN定時關閉
+void FANclose1(){
+digitalWrite(relayPin, HIGH);
+delay(3000);
+digitalWrite(relayPin, LOW);
+  }
+void FANclose2(){
+digitalWrite(relayPin, HIGH);
+delay(5000);
+digitalWrite(relayPin, LOW);
+  }
+void FANclose3(){
+digitalWrite(relayPin, HIGH);
+delay(10000);
+digitalWrite(relayPin, LOW);
+  }
+//FAN定時開啟
+void FANopen1(){
+digitalWrite(relayPin, LOW);
+delay(3000);
+digitalWrite(relayPin, HIGH);
+  }
+void FANopen2(){
+digitalWrite(relayPin, LOW);
+delay(5000);
+digitalWrite(relayPin, HIGH);
+  }
+void FANopen3(){
+digitalWrite(relayPin, LOW);
+delay(10000);
+digitalWrite(relayPin, HIGH);
+  }
+  
+  
+  
+void switchRelay()
+{
+  if (relayState == 0)                        
+    relayState = 1;                      // 把繼電器狀態改為 ON
+  else
+    relayState = 0;                      // 把繼電器狀態改為 OFF     
+ digitalWrite(relayPin, relayState);    // 讓繼電器作動, 切換開關
+
+}
